@@ -65,18 +65,32 @@ def _absence_dates_for_student(db: Session, student_id: int) -> list[date]:
 
 
 def _students_below_threshold(db: Session, threshold: float) -> list[dict[str, Any]]:
+    q = (
+        db.query(
+            Student.id,
+            Student.name,
+            Student.roll_number,
+            Student.class_section,
+            func.count(AttendanceRecord.id).label("total_days"),
+            func.sum(case((AttendanceRecord.present.is_(True), 1), else_=0)).label("present_days")
+        )
+        .outerjoin(AttendanceRecord, AttendanceRecord.student_id == Student.id)
+        .group_by(Student.id)
+        .all()
+    )
     out = []
-    for s in db.query(Student).all():
-        st = _student_pct(db, s.id)
-        if st["total_days"] and st["attendance_percentage"] < threshold:
-            out.append(
-                {
-                    "name": s.name,
-                    "roll_number": s.roll_number,
-                    "class_section": s.class_section,
-                    "percentage": st["attendance_percentage"],
-                }
-            )
+    for r in q:
+        total = r.total_days or 0
+        if total > 0:
+            pres = int(r.present_days or 0)
+            pct = round((pres / total) * 100, 2)
+            if pct < threshold:
+                out.append({
+                    "name": r.name,
+                    "roll_number": r.roll_number,
+                    "class_section": r.class_section,
+                    "percentage": pct,
+                })
     out.sort(key=lambda x: x["percentage"])
     return out
 
@@ -87,8 +101,8 @@ def _trend_last_days(db: Session, days: int) -> list[dict[str, Any]]:
     rows = (
         db.query(
             AttendanceRecord.attendance_date,
-            func.sum(case((AttendanceRecord.present.is_(True), 1), else_=0)).label("p"),
-            func.count(AttendanceRecord.id).label("t"),
+            func.sum(case((AttendanceRecord.present.is_(True), 1), else_=0)).label("pres_count"),
+            func.count(AttendanceRecord.id).label("total_count"),
         )
         .filter(AttendanceRecord.attendance_date >= start, AttendanceRecord.attendance_date <= end)
         .group_by(AttendanceRecord.attendance_date)
@@ -98,8 +112,8 @@ def _trend_last_days(db: Session, days: int) -> list[dict[str, Any]]:
     return [
         {
             "date": str(r.attendance_date),
-            "present": int(r.p or 0),
-            "absent": int((r.t or 0) - (r.p or 0)),
+            "present": int(r.pres_count or 0),
+            "absent": int((r.total_count or 0) - (r.pres_count or 0)),
         }
         for r in rows
     ]
@@ -119,25 +133,51 @@ def _frequent_absentees(db: Session, top_n: int = 10) -> list[dict[str, Any]]:
 
 
 def _report_section(db: Session, section: str) -> dict[str, Any]:
-    students = db.query(Student).filter(Student.class_section.ilike(section.strip())).all()
-    if not students:
+    q = (
+        db.query(
+            Student.id,
+            Student.name,
+            Student.roll_number,
+            func.count(AttendanceRecord.id).label("total_days"),
+            func.sum(case((AttendanceRecord.present.is_(True), 1), else_=0)).label("present_days")
+        )
+        .outerjoin(AttendanceRecord, AttendanceRecord.student_id == Student.id)
+        .filter(Student.class_section.ilike(section.strip()))
+        .group_by(Student.id)
+        .all()
+    )
+    if not q:
         return {"summary": f"No students found in section matching '{section}'.", "stats": {}}
+    
     pcts = []
-    for s in students:
-        st = _student_pct(db, s.id)
-        pcts.append(st["attendance_percentage"])
+    below = []
+    for r in q:
+        total = r.total_days or 0
+        if total > 0:
+            pres = int(r.present_days or 0)
+            pct = round((pres / total) * 100, 2)
+            pcts.append(pct)
+            if pct < settings.attendance_threshold_pct:
+                below.append({"name": r.name, "roll": r.roll_number})
+        else:
+            pcts.append(0.0)
+
     avg = round(sum(pcts) / len(pcts), 2) if pcts else 0.0
-    below = [s for s in students if _student_pct(db, s.id)["total_days"] and _student_pct(db, s.id)["attendance_percentage"] < settings.attendance_threshold_pct]
+    
+    summary = (
+        f"Section {section}: {len(q)} students, class average attendance {avg}%.\n"
+        f"{len(below)} student(s) below {settings.attendance_threshold_pct}%:\n"
+    )
+    if below:
+        summary += "\n".join([f"- {s['name']} ({s['roll']})" for s in below])
+        
     return {
-        "summary": (
-            f"Section {section}: {len(students)} students, class average attendance {avg}%. "
-            f"{len(below)} student(s) below {settings.attendance_threshold_pct}%."
-        ),
+        "summary": summary,
         "stats": {
-            "student_count": len(students),
+            "student_count": len(q),
             "average_percentage": avg,
             "below_threshold_count": len(below),
-            "below_threshold": [{"name": s.name, "roll": s.roll_number} for s in below],
+            "below_threshold": below,
         },
     }
 
@@ -217,9 +257,19 @@ def _rule_based_answer(db: Session, message: str) -> dict[str, Any]:
         dm = re.search(r"(\d{1,3})\s*days?", m)
         days = int(dm.group(1)) if dm else 30
         tr = _trend_last_days(db, min(days, 365))
+        
+        lines = [f"Attendance trend for last {days} days ({len(tr)} days with records):"]
+        if tr:
+            lines.append("Date       | Present | Absent")
+            lines.append("-----------------------------")
+            for t in tr:
+                lines.append(f"{t['date']} | {str(t['present']).ljust(7)} | {t['absent']}")
+        else:
+            lines.append("No records found.")
+            
         return {
             "kind": "answer",
-            "message": f"Attendance trend for last {days} days ({len(tr)} days with records). See structured data.",
+            "message": "\n".join(lines),
             "data": {"trend": tr},
         }
 

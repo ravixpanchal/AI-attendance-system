@@ -45,8 +45,7 @@ export function AIChat() {
         ]);
       } else {
         setPendingToken(null);
-        const extra = res.data ? "\n\n" + JSON.stringify(res.data, null, 2) : "";
-        setMessages((m) => [...m, { role: "assistant", content: res.message + extra }]);
+        setMessages((m) => [...m, { role: "assistant", content: res.message }]);
       }
     } catch (e) {
       setMessages((m) => [...m, { role: "assistant", content: "Error: " + String(e) }]);
