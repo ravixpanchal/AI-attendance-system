@@ -1,0 +1,240 @@
+================================================================================
+  AI-BASED SMART ATTENDANCE MANAGEMENT SYSTEM — RUN GUIDE
+================================================================================
+
+This file explains:
+  (1) What you need installed (requirements)
+  (2) How to run the project on your computer (step by step)
+  (3) Where and how to deploy it online
+
+
+================================================================================
+PART 1 — REQUIREMENTS (WHAT YOU NEED)
+================================================================================
+
+SOFTWARE (must install)
+------------------------
+  • Python 3.10 or newer (3.11+ recommended)
+        Download: https://www.python.org/downloads/
+        During setup on Windows, enable "Add Python to PATH".
+
+  • Node.js 18 or newer (includes npm)
+        Download: https://nodejs.org/ (LTS version is fine)
+
+  • A modern web browser (Chrome, Edge, Firefox) for the admin UI.
+
+OPTIONAL (for production or richer AI)
+--------------------------------------
+  • PostgreSQL — only if you do NOT want to use the default SQLite file.
+        Local dev can use SQLite only (no separate database server).
+
+  • Git — if you clone or version-control the project.
+        Download: https://git-scm.com/
+
+  • OpenAI API key — optional. The app works without it using rule-based AI.
+        If you add OPENAI_API_KEY in backend/.env, natural-language features improve.
+
+HARDWARE / NETWORK
+------------------
+  • At least ~500 MB free disk space for dependencies (node_modules, Python packages).
+  • Internet connection for first-time "pip install" and "npm install".
+  • For deployment: stable hosting accounts (see Part 3).
+
+
+================================================================================
+PART 2 — HOW TO RUN THE PROJECT LOCALLY (DETAILED STEPS)
+================================================================================
+
+You must run TWO processes: the BACKEND (API) first, then the FRONTEND (web app).
+Default login after first start: username "admin", password "admin123"
+(change these in backend/.env for security).
+
+
+STEP A — PREPARE THE BACKEND (FastAPI)
+--------------------------------------
+
+  1. Open a terminal (PowerShell or Command Prompt on Windows).
+
+  2. Go to the project folder, then into "backend":
+
+        cd path\to\your\DBMS Project\backend
+
+  3. (Recommended) Create a Python virtual environment so packages do not clash
+     with other projects:
+
+        python -m venv .venv
+
+  4. Activate the virtual environment:
+
+        Windows (PowerShell or CMD):
+            .venv\Scripts\activate
+
+        macOS / Linux:
+            source .venv/bin/activate
+
+  5. Install Python dependencies:
+
+        pip install -r requirements.txt
+
+     If pip fails, try:  python -m pip install -r requirements.txt
+
+  6. Create environment file from the example:
+
+        Windows:
+            copy .env.example .env
+
+        macOS / Linux:
+            cp .env.example .env
+
+     Edit ".env" in the "backend" folder if needed:
+        • SECRET_KEY — use a long random string in real use
+        • ADMIN_USERNAME / ADMIN_PASSWORD — your admin login
+        • DATABASE_URL — leave default sqlite for local dev, or set PostgreSQL URL
+        • CORS_ORIGINS — include your frontend URL (e.g. http://localhost:5173)
+        • OPENAI_API_KEY — optional, for OpenAI-powered AI assistant
+
+  7. Start the API server:
+
+        uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+     Keep this terminal window OPEN.
+
+  8. Verify the backend:
+        • Open browser: http://127.0.0.1:8000
+        • API docs (Swagger): http://127.0.0.1:8000/docs
+
+     On first run, the app creates the database file (default: attendance.db
+     in the backend folder) and creates the admin user from .env.
+
+
+STEP B — PREPARE THE FRONTEND (React + Vite)
+--------------------------------------------
+
+  1. Open a SECOND terminal window.
+
+  2. Go to the "frontend" folder:
+
+        cd path\to\your\DBMS Project\frontend
+
+  3. Install Node dependencies (only needed the first time or after changes):
+
+        npm install
+
+  4. (Optional) For local development you usually do NOT need a .env file,
+     because Vite is configured to proxy API calls to http://127.0.0.1:8000.
+
+     If your API runs on another host/port, create "frontend/.env" from
+     "frontend/.env.example" and set:
+
+        VITE_API_URL=http://your-api-url
+
+  5. Start the development server:
+
+        npm run dev
+
+  6. Open the URL shown in the terminal (usually http://localhost:5173).
+
+  7. Log in with the admin credentials from backend/.env (defaults: admin / admin123).
+
+
+STEP C — BUILD FRONTEND FOR PRODUCTION (LOCAL TEST)
+-----------------------------------------------------
+
+  From the "frontend" folder:
+
+        npm run build
+        npm run preview
+
+  This builds static files into "frontend/dist". Hosted sites (e.g. Vercel)
+  use the same "npm run build" output.
+
+
+TROUBLESHOOTING (LOCAL)
+-----------------------
+  • "ModuleNotFoundError" (Python): activate .venv and run pip install again.
+  • Port 8000 busy: use another port, e.g.  uvicorn main:app --port 8001
+    and update frontend proxy / VITE_API_URL accordingly.
+  • Frontend cannot reach API: start backend first; check firewall; ensure
+    CORS_ORIGINS in backend/.env includes your frontend origin.
+  • Login fails: delete attendance.db (SQLite) only if you accept losing local
+    data, then restart backend so admin is re-seeded — or fix ADMIN_* in .env.
+
+
+================================================================================
+PART 3 — WHERE TO DEPLOY (HOSTING OPTIONS)
+================================================================================
+
+Typical setup: host the FRONTEND and BACKEND separately; use a managed DATABASE
+for production (PostgreSQL recommended instead of SQLite on a server).
+
+
+FRONTEND (static React build)
+-----------------------------
+  Recommended platforms:
+    • Vercel — https://vercel.com
+        Connect your Git repo or upload the project; set:
+          Build command:    npm run build
+          Output directory: dist
+          Root directory:   frontend  (if the repo root is the whole project)
+
+    • Netlify — https://www.netlify.com
+        Similar: build "npm run build", publish "frontend/dist".
+
+    • Cloudflare Pages — https://pages.cloudflare.com
+
+  Environment variable on the host:
+    VITE_API_URL = https://your-backend-api-url   (no trailing slash)
+
+  Redeploy the frontend whenever you change VITE_API_URL or front-end code.
+
+
+BACKEND (FastAPI / Uvicorn)
+---------------------------
+  Recommended platforms:
+    • Render — https://render.com
+        Web Service, start command example:
+          uvicorn main:app --host 0.0.0.0 --port $PORT
+        Set working directory to "backend" if the repo contains both apps.
+
+    • Railway — https://railway.app
+        Similar: run uvicorn with PORT from the platform.
+
+    • Fly.io, Google Cloud Run, AWS Elastic Beanstalk — possible with Docker or
+      native Python; more setup than Render/Railway.
+
+  Environment variables to set on the host (same names as backend/.env):
+    DATABASE_URL, SECRET_KEY, ADMIN_USERNAME, ADMIN_PASSWORD,
+    CORS_ORIGINS (must list your deployed frontend URL, e.g. https://your-app.vercel.app),
+    OPENAI_API_KEY (optional), OPENAI_MODEL (optional).
+
+  Start command notes:
+    Use the port variable the platform provides (often PORT or $PORT).
+
+
+DATABASE (production)
+---------------------
+  Recommended managed PostgreSQL:
+    • Neon — https://neon.tech
+    • Supabase (PostgreSQL) — https://supabase.com
+
+  Steps (typical):
+    1. Create a PostgreSQL database on Neon or Supabase.
+    2. Copy the connection string into DATABASE_URL on your backend host.
+    3. Optional: run SQL from "database/schema_postgresql.sql" once, or rely on
+       the app’s automatic table creation on first deploy (fresh database).
+
+  Do not rely on SQLite for multi-server production deployments.
+
+
+SUMMARY TABLE (COMMON CHOICE)
+-------------------------------
+  Component        Suggested service
+  ---------        -----------------
+  Frontend         Vercel or Netlify
+  Backend API      Render or Railway
+  Database         Neon or Supabase (PostgreSQL)
+
+
+================================================================================
+END OF run.txt
+================================================================================
