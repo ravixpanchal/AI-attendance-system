@@ -6,16 +6,18 @@ import react from "@vitejs/plugin-react";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** Same proxy for dev + preview; target port must match `uvicorn --port` (see frontend/.env). */
+const backendUrl = process.env["VITE_API_URL"] || "http://127.0.0.1:8765";
+
 const apiProxy = {
-  "/auth": { target: "http://127.0.0.1:8765", changeOrigin: true },
-  "/students": { target: "http://127.0.0.1:8765", changeOrigin: true },
-  "/attendance": { target: "http://127.0.0.1:8765", changeOrigin: true },
-  "/upload": { target: "http://127.0.0.1:8765", changeOrigin: true },
-  "/analytics": { target: "http://127.0.0.1:8765", changeOrigin: true },
-  "/export": { target: "http://127.0.0.1:8765", changeOrigin: true },
-  "/ai": { target: "http://127.0.0.1:8765", changeOrigin: true },
-  "/ai-query": { target: "http://127.0.0.1:8765", changeOrigin: true },
-  "/ai-confirm": { target: "http://127.0.0.1:8765", changeOrigin: true },
+  "/auth":       { target: backendUrl, changeOrigin: true },
+  "/students":   { target: backendUrl, changeOrigin: true },
+  "/attendance": { target: backendUrl, changeOrigin: true },
+  "/upload":     { target: backendUrl, changeOrigin: true },
+  "/analytics":  { target: backendUrl, changeOrigin: true },
+  "/export":     { target: backendUrl, changeOrigin: true },
+  "/ai":         { target: backendUrl, changeOrigin: true },
+  "/ai-query":   { target: backendUrl, changeOrigin: true },
+  "/ai-confirm": { target: backendUrl, changeOrigin: true },
 } as const;
 
 export default defineConfig({

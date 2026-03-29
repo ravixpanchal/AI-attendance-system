@@ -1,4 +1,8 @@
-const API = import.meta.env.VITE_API_URL || "";
+const API: string = import.meta.env.VITE_API_URL || "";
+
+if (!import.meta.env.VITE_API_URL) {
+  console.warn("VITE_API_URL is not set — using relative paths (dev proxy mode)");
+}
 
 function authHeader(): HeadersInit {
   const t = localStorage.getItem("token");
